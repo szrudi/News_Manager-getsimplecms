@@ -4,23 +4,24 @@
  * News Manager edit post template
  */
 
+global $NMPAGEURL;
 
-# image input field (since 2.5)
-global $NMIMAGEINPUT;
-if ($NMIMAGEINPUT === true) {
-  $NMIMAGEINPUT = 2;
+# image input field (since 3.0)
+global $NMSETTING;
+if (defined('NMIMAGEINPUT')) {
+  $imageinputpos = intval(NMIMAGEINPUT);
+  if ($imageinputpos < 0 || $imageinputpos > 4) $imageinputpos = 2;
 } else {
-  $NMIMAGEINPUT = intval($NMIMAGEINPUT);
-  if ($NMIMAGEINPUT < 0 || $NMIMAGEINPUT > 4) $NMIMAGEINPUT = 2;
+  $imageinputpos = $NMSETTING['images'] != 'N' ? 2 : 0;
 }
-if ($NMIMAGEINPUT) {
-  global $SITEURL, $NMIMAGEDIR;
-  if ($NMIMAGEDIR) {
-    $imagepath = '&path='.trim($NMIMAGEDIR, '/');
+if ($imageinputpos > 0) {
+  global $SITEURL;
+  if (defined('NMIMAGEDIR')) {
+    $imagepath = '&path='.trim(NMIMAGEDIR, '/');
   } else {
     $imagepath = '';
   }
-  $imageinput = '  <p>
+  $imageinputcode = '  <p>
       <label for="post-image">'.i18n_r('news_manager/POST_IMAGE').':</label>
       <input class="text short" id="post-image" name="post-image" type="text" style="width:450px" value="'.$image.'" />
       <span class="edit-nav"><a href="#" id="browse-image">'.i18n_r('SELECT_FILE').'</a></span>
@@ -39,7 +40,7 @@ if ($NMIMAGEINPUT) {
     </script>
 ";
 } else {
-  $imageinput = '<input name="post-image" type="hidden" value="'.$image.'" />
+  $imageinputcode = '<input name="post-image" type="hidden" value="'.$image.'" />
 ';
 }
 
@@ -55,7 +56,7 @@ if ($NMIMAGEINPUT) {
 </h3>
 <div class="edit-nav" >
   <?php
-  if (file_exists($file) && $private == '') {
+  if (!empty($NMPAGEURL) && $NMPAGEURL != '' && !$newpost && $private == '') {
     $url = nm_get_url('post') . $slug;
     ?>
     <a href="<?php echo $url; ?>" target="_blank">
@@ -71,15 +72,17 @@ if ($NMIMAGEINPUT) {
 </div>
 <form class="largeform" id="edit" action="load.php?id=news_manager" method="post" accept-charset="utf-8">
   <?php
-  if (!empty($slug))
-    echo "<p><input name=\"current-slug\" type=\"hidden\" value=\"$slug\" /></p>";
+  if (!$newpost)
+    echo '<input name="current-slug" type="hidden" value="',$slug,'" />';
+  if (!empty($author))
+    echo '<input name="author" type="hidden" value="',$author,'" />';
   ?>
   <p>
     <input class="text title required" name="post-title" id="post-title" type="text" value="<?php echo $title; ?>" placeholder="<?php i18n('news_manager/POST_TITLE'); ?>" />
   </p>
   <noscript><style>#metadata_window {display:block !important} </style></noscript>
   <div style="display:none;" id="metadata_window">
-  <?php if (!$NMIMAGEINPUT || $NMIMAGEINPUT == 1) echo $imageinput; ?>
+  <?php if ($imageinputpos <= 1) echo $imageinputcode; ?>
     <div class="leftopt">
       <p>
         <label for="post-slug"><?php i18n('news_manager/POST_SLUG'); ?>:</label>
@@ -106,19 +109,19 @@ if ($NMIMAGEINPUT) {
       </p>
     </div>
     <div class="clear"></div>
-    <?php if ($NMIMAGEINPUT == 2) echo $imageinput; ?>
+    <?php if ($imageinputpos == 2) echo $imageinputcode; ?>
   </div>
-  <?php if ($NMIMAGEINPUT == 3) echo $imageinput; ?>
+  <?php if ($imageinputpos == 3) echo $imageinputcode; ?>
   <p>
     <textarea name="post-content"><?php echo $content; ?></textarea>
   </p>
-  <?php if ($NMIMAGEINPUT == 4) echo $imageinput; ?>
+  <?php if ($imageinputpos == 4) echo $imageinputcode; ?>
   <p>
     <input name="post" type="submit" class="submit" value="<?php i18n('news_manager/SAVE_POST'); ?>" />
     &nbsp;&nbsp;<?php i18n('news_manager/OR'); ?>&nbsp;&nbsp;
     <a href="load.php?id=news_manager&amp;cancel" class="cancel"><?php i18n('news_manager/CANCEL'); ?></a>
     <?php
-    if (file_exists($file)) {
+    if (!$newpost) {
       ?>
       /
       <a href="load.php?id=news_manager&amp;delete=<?php echo $slug; ?>" class="cancel">
@@ -131,24 +134,30 @@ if ($NMIMAGEINPUT) {
 </form>
 
 <script>
-  jQuery.extend(jQuery.validator.messages, {
-    required: "<?php i18n('news_manager/FIELD_IS_REQUIRED'); ?>",
-    dateISO: "<?php i18n('news_manager/ENTER_VALID_DATE'); ?>"
-  });
-
+  if ($.validator) {
+    jQuery.extend(jQuery.validator.messages, {
+      required: "<?php i18n('news_manager/FIELD_IS_REQUIRED'); ?>",
+      dateISO: "<?php i18n('news_manager/ENTER_VALID_DATE'); ?>"
+    });
+  }
+  
   $(document).ready(function(){
-    $.validator.addMethod("time", function(value, element) {
-        return this.optional(element) || /^([01]?[0-9]|2[0-3]):[0-5][0-9]/.test(value);
-    },
-    "<?php i18n('news_manager/ENTER_VALID_TIME'); ?>")
+    if ($.validator) {
+      $.validator.addMethod("time", function(value, element) {
+          return this.optional(element) || /^([01]?[0-9]|2[0-3]):[0-5][0-9]/.test(value);
+      },
+      "<?php i18n('news_manager/ENTER_VALID_TIME'); ?>")
+    }
 
-    $("#edit").validate({
-      errorClass: "invalid",
-      rules: {
-        "post-date": { dateISO: true },
-        "post-time": { time: true }
-      }
-    })
+    if ($.validator) {
+      $("#edit").validate({
+        errorClass: "invalid",
+        rules: {
+          "post-date": { dateISO: true },
+          "post-time": { time: true }
+        }
+      })
+    }
 
     $("#<?php echo (empty($data)) ? 'post-title' : 'metadata_toggle'; ?>").focus();
 

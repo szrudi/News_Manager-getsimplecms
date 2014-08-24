@@ -10,23 +10,36 @@
  * @param $slug - post slug
  * @action edit or create posts
  */
-function nm_edit_post($slug) {
-  $file = NMPOSTPATH . "$slug.xml";
-  if ($slug != '' && dirname(realpath($file)) != realpath(NMPOSTPATH)) die(''); // path traversal
-  # get post data, if it exists
-  $data    = @getXML($file);
-  $title   = @stripslashes($data->title);
-  $date    = !empty($data) ? date('Y-m-d', strtotime($data->date)) : '';
-  $time    = !empty($data) ? date('H:i', strtotime($data->date)) : '';
-  $tags    = @str_replace(',', ', ', ($data->tags));
-  $private = @$data->private != '' ? 'checked' : '';
-  $image   = @stripslashes($data->image);
-  $content = @stripslashes($data->content);
+function nm_edit_post($slug = '') {
+  $newpost = ($slug === '');
+  if ($newpost) {
+    $title   = '';
+    $date    = '';
+    $time    = '';
+    $tags    = '';
+    $private = '';
+    $image   = '';
+    $content = '';
+  } else {
+    $file = NMPOSTPATH.$slug.'.xml';
+    if (dirname(realpath($file)) != realpath(NMPOSTPATH)) die(''); // path traversal
+    # get post data, if it exists
+    $data    = @getXML($file);
+    $title   = @stripslashes($data->title);
+    $date    = isset($data->date) ? date('Y-m-d', strtotime($data->date)) : '';
+    $time    = isset($data->date) ? date('H:i', strtotime($data->date)) : '';
+    $tags    = @str_replace(',', ', ', ($data->tags));
+    $private = @$data->private != '' ? 'checked' : '';
+    $image   = @stripslashes($data->image);
+    $content = @stripslashes($data->content);
+    if (isset($data->author))
+      $author = stripslashes($data->author);
+  }
   # show edit post form
   include(NMTEMPLATEPATH . 'edit_post.php');
-  if (file_exists($file)) {
+  if (!$newpost) {
     $mtime = date(i18n_r('DATE_AND_TIME_FORMAT'), filemtime($file));
-    echo '<small>' . i18n_r('news_manager/LAST_SAVED') . ": $mtime</small>";
+    echo '<small>',i18n_r('news_manager/LAST_SAVED'),': ',$mtime,'</small>';
   }
   include(NMTEMPLATEPATH . 'ckeditor.php');
 }
@@ -53,13 +66,13 @@ function nm_save_post() {
     $slug = nm_create_slug($_POST['post-title']);
     if ($slug == '') $slug = 'post';
   }
-  $file = NMPOSTPATH . "$slug.xml";
+  $file = NMPOSTPATH.$slug.'.xml';
   # do not overwrite other posts
   if (file_exists($file)) {
     $count = 1;
-    $file = NMPOSTPATH . "$slug-$count.xml";
+    $file = NMPOSTPATH.$slug.'-'.$count.'.xml';
     while (file_exists($file))
-      $file = NMPOSTPATH . "$slug-" . ++$count . '.xml';
+      $file = NMPOSTPATH.$slug.'-'.++$count.'.xml';
     $slug = basename($file, '.xml');
   }
   # create undo target if there's a backup available
@@ -69,10 +82,18 @@ function nm_save_post() {
   $title     = safe_slash_html($_POST['post-title']);
   $timestamp = strtotime($_POST['post-date'] . ' ' . $_POST['post-time']);
   $date      = $timestamp ? date('r', $timestamp) : date('r');
-  $tags      = str_replace(array(' ', ',,'), array('', ','), safe_slash_html($_POST['post-tags']));
+  $tags      = nm_lowercase_tags(trim(preg_replace(array('/\s+/','/\s*,\s*/','/,+/'),array(' ',',',','),safe_slash_html(trim($_POST['post-tags']))),','));
   $private   = isset($_POST['post-private']) ? 'Y' : '';
   $image     = safe_slash_html($_POST['post-image']);
   $content   = safe_slash_html($_POST['post-content']);
+  if (defined('NMSAVEAUTHOR') && NMSAVEAUTHOR) {
+    if (isset($_POST['author'])) {
+      $author  = safe_slash_html($_POST['author']);
+    } else {
+      global $USR;
+      $author = $USR ? $USR : '';
+    }
+  }
   # create xml object
   $xml = new SimpleXMLExtended('<?xml version="1.0" encoding="UTF-8"?><item></item>');
   $obj = $xml->addChild('title');
@@ -87,11 +108,17 @@ function nm_save_post() {
   $obj->addCData($image);
   $obj = $xml->addChild('content');
   $obj->addCData($content);
+  if (isset($author)) {
+    $obj = $xml->addChild('author');
+    $obj->addCData($author);
+  }
   # write data to file
-  if (@XMLsave($xml, $file) && nm_update_cache())
+  if (@XMLsave($xml, $file) && nm_update_cache()) {
+    nm_generate_sitemap();
     nm_display_message(i18n_r('news_manager/SUCCESS_SAVE'), false, @$backup);
-  else
+  } else {
     nm_display_message(i18n_r('news_manager/ERROR_SAVE'), true);
+  }
 }
 
 
@@ -101,17 +128,19 @@ function nm_save_post() {
  * @action deletes the requested post
  */
 function nm_delete_post($slug) {
-  $file = "$slug.xml";
+  $file = $slug.'.xml';
   # path traversal?
   if (dirname(realpath(NMPOSTPATH.$file)) != realpath(NMPOSTPATH)) {
     nm_display_message('<b>Error:</b> incorrect path', true); // not translated
   } else {
       # delete post
       if (file_exists(NMPOSTPATH . $file)) {
-        if (nm_rename_file(NMPOSTPATH.$file, NMBACKUPPATH.$file) && nm_update_cache())
+        if (nm_rename_file(NMPOSTPATH.$file, NMBACKUPPATH.$file) && nm_update_cache()) {
+          nm_generate_sitemap();
           nm_display_message(i18n_r('news_manager/SUCCESS_DELETE'), false, $slug);
-        else
+        } else {
           nm_display_message(i18n_r('news_manager/ERROR_DELETE'), true);
+        }
       }
   }
 }
@@ -141,10 +170,12 @@ function nm_restore_post($backup) {
           $status = nm_rename_file(NMBACKUPPATH.$backup, NMPOSTPATH.$backup) &&
                     nm_update_cache();
   }
-  if (@$status)
+  if (@$status) {
+    nm_generate_sitemap();
     nm_display_message(i18n_r('news_manager/SUCCESS_RESTORE'));
-  else
+  } else {
     nm_display_message(i18n_r('news_manager/ERROR_RESTORE'), true);
+  }
 }
 
 

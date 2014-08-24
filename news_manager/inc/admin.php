@@ -10,7 +10,7 @@
  * @action back-end main panel (post overview)
  */
 function nm_admin_panel() {
-  global $PRETTYURLS, $NMPRETTYURLS;
+  global $NMPAGEURL;
   $posts = nm_get_posts(true);
   ?>
   <h3 class="floated"><?php i18n('news_manager/PLUGIN_NAME'); ?></h3>
@@ -64,9 +64,11 @@ function nm_admin_panel() {
           ?>
         </td>
         <td class="secondarylink">
-          <a href="<?php echo $url; ?>" target="_blank" title="<?php i18n('news_manager/VIEW_POST'); ?>: <?php echo $title; ?>">
-            #
-          </a>
+          <?php if ($NMPAGEURL && $NMPAGEURL != '') { ?>
+            <a href="<?php echo $url; ?>" target="_blank" title="<?php i18n('news_manager/VIEW_POST'); ?>: <?php echo $title; ?>">
+              #
+            </a>
+          <?php } ?>
         </td>
         <td class="delete">
           <a href="load.php?id=news_manager&amp;delete=<?php echo $post->slug; ?>" class="nm_delconfirm" title="<?php i18n('news_manager/DELETE_POST'); ?>: <?php echo $title; ?>?">
@@ -86,7 +88,7 @@ function nm_admin_panel() {
     <script>
     $(document).ready(function() {
       // filter button opens up filter dialog
-      $("#filter-button").live("click", function($e) {
+      $("#filter-button").on("click", function($e) {
         $e.preventDefault();
         $("#filter-search").slideToggle();
         $(this).toggleClass("current");
@@ -99,7 +101,7 @@ function nm_admin_panel() {
         }
       });
       // close filter dialog on cancel
-      $("#filter-search .cancel").live("click", function($e) {
+      $("#filter-search .cancel").on("click", function($e) {
         $e.preventDefault();
         $("#posts tr").show();
         $('#filter-button').toggleClass("current");

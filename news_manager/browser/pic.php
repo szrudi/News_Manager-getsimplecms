@@ -3,6 +3,8 @@
 # | Copyright (c) 2013 Martin Vlcek                                    |
 # | License: GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)          |
 # +--------------------------------------------------------------------+
+# | Modified by Carlos Navarro (for News Manager)                      |
+# +--------------------------------------------------------------------+
 
 define('CACHE_SECONDS', 3600*24); // for how long images should be cached
 
@@ -11,7 +13,12 @@ $maxWidth = @$_GET['w'];
 $maxHeight = @$_GET['h'];
 $crop = @$_GET['c'] && $maxWidth && $maxHeight;
 $datadir = substr(dirname(__FILE__), 0, strrpos(dirname(__FILE__), DIRECTORY_SEPARATOR.'plugins')) . '/data/';
-$imagedir = $datadir . 'uploads/';
+if (strpos($infile,'/data/thumbs/')) {
+  $imagedir = $datadir . 'thumbs/';
+  $infile = substr($infile,strpos($infile,'/data/thumbs/')+13);
+} else {
+  $imagedir = $datadir . 'uploads/';
+}
 if (!$maxWidth && !$maxHeight) {
   $info = @getimagesize($imagedir.$infile);
   if (!$info) die('File not found or not an image!');
@@ -22,7 +29,7 @@ if (!$maxWidth && !$maxHeight) {
 } else {
   $pos = strrpos($infile,'/');
   if ($pos === false) $pos = -1;
-  $outfile = substr($infile, 0, $pos+1) . 'i18npic.' . ($crop ? 'C' : '') . ($maxWidth ? $maxWidth.'x' : '0x') . ($maxHeight ? $maxHeight.'.' : '0.') . substr($infile, $pos+1);
+  $outfile = substr($infile, 0, $pos+1) . 'nmimage.' . ($crop ? 'C' : '') . ($maxWidth ? $maxWidth.'x' : '0x') . ($maxHeight ? $maxHeight.'.' : '0.') . substr($infile, $pos+1);
   $outfile = substr($outfile, 0, strrpos($outfile,'.')) . '.jpg';
   $thumbdir = $datadir . 'thumbs/';
   if (!file_exists($thumbdir.$outfile) || @filemtime($thumbdir.$outfile) < @filemtime($imagedir.$infile)) {
